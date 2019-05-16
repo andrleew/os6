@@ -34,58 +34,57 @@ void* thread_sleep(void * argv){
 
 int main(){
     Database database;
-    pthread_t thread;
+//    pthread_t thread;
     string command;
-    ostringstream oss;
     sl = false;
-    pthread_create(&thread, NULL, thread_sleep, NULL);
+//    pthread_create(&thread, NULL, thread_sleep, NULL);
     connection connect(ZMQ_REP);
     cout << "server start\n";
     while (true){
-        ok();
-        while (sl) sleep(1);
-        istringstream iss(connect.recieve_message());
+        ostringstream oss;
+//        while (sl) sleep(1);
+        istringstream iss(connect.recieve());
         iss >> command;
         if (command == "login"){
             string name;
             iss >> name;
             oss << database.Login(name);
-            connect.send_message(oss.str());
+            connect.send(oss.str());
         }else if (command == "registrate"){
             string name;
             iss >> name;
             oss << database.Register(name);
-            connect.send_message(oss.str());
+            connect.send(oss.str());
         }else if (command == "balance"){
             double key;
             iss >> key;
             oss << database.GetBalance(key);
-            connect.send_message(oss.str());
+            connect.send(oss.str());
         }else if(command == "add"){
             double key;
             size_t value;
             iss >> key >> value;
             database.AddMoney(key, value);
+            connect.send("");
         }else if (command == "get"){
             double key;
             size_t value;
             iss >> key >> value;
             oss << database.GetMoney(key, value);
-            connect.send_message(oss.str());
+            connect.send(oss.str());
         }else if (command == "transfer"){
-            double from, to;
+            string to;
+            double from;
             size_t value;
             iss >> from >> to >> value;
             oss << database.Transfer(from, to, value);
-            connect.send_message(oss.str());
+            connect.send(oss.str());
         }else if (command == "logout"){
-            double key;
-            iss >> key;
-            database.Remove(key);
+            string name;
+            iss >> name;
+            database.Remove(name);
+            connect.send("");
         }
-        ok();
-        oss.clear();
-        ok();
     }
     return 0;
 }

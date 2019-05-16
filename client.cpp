@@ -1,140 +1,170 @@
+#include "connection.h"
 #include <iostream>
 #include <string>
-#include <cstdlib>
-#include <sstream>
-
-#include <unistd.h>
-#include <string.h>
-#include <zmq.h>
-
-#include "connection.h"
 
 using namespace std;
 
-double key;
+connection connect;
 string name;
+string id;
 
-void ok(){ cout << "ok\n";}
+enum consent{
+    yes,
+    no,
+    error
+};
 
-string get_name(){
-    cout << "Enter your name: ";
-    cin >> name;
-    return name;
+void success(const string & s){
+    cout << "\t\t~~~~~~" << s << "~~~~~~\n";
 }
 
-bool _login(connection connect){
-    ostringstream oss;
-    oss << "login " << name;
-    connect.send_message(oss.str());
-    istringstream iss(connect.recieve_message());
-    double success;
-    iss >> success;
-    if (success > 0){
-        iss >> key;
-        return true;
-    }
-    return false;
+void failure(const string & s){
+    cout << "\t\t******" << s << "******\n";
 }
 
-void registrate(connection connect){
-    ostringstream oss;
-    oss << "registrate " << name;
-    connect.send_message(oss.str());
-    istringstream iss(connect.recieve_message());
-    iss >> key;
-}
-
-void enter(connection connect){
-    name = get_name();
-    if (!_login(connect)){
-        char c;
-        bool flag = true;;
-        while (flag){
-            cout << "We can't found you in our database.\nDo you want to registrate? Y/N : ";
-            cin >> c;
-            switch (c)
-            {
-                case 'y':
-                case 'Y':
-                    registrate(connect);
-                case 'n':
-                case 'N':
-                    flag = false;
-                    break;
-            }
+consent ask(const string & str){
+    string s;
+    while (true){
+        cout << str << " [Y/n] ";
+        if (!(cin >> s)) return error;
+        switch (s[0]){
+            case 'Y':
+            case 'y':
+                return yes;
+            case 'N':
+            case 'n':
+                return no;
         }
     }
 }
 
-size_t balance(connection connect){
-    ostringstream oss;
-    oss << "balance " << key;
-    connect.send_message(oss.str());
-    istringstream iss(connect.recieve_message());
-    size_t sum;
-    iss >> sum;
-    return sum;
+string enter_name(){
+    string s;
+    cout << "enter your name: ";
+    cin >> s;
+    return s;
 }
 
-void add(connection connect, size_t value){
-    ostringstream oss;
-    oss << "add " << key << " " << value;
-    connect.send_message(oss.str());
+bool login(){
+    string s = enter_name();
+    connect.send("login " + s);
+    int my_index = stoi(connect.recieve());
+    if (my_index < 0) return false;
+    id = to_string(my_index);
+    name = s;
+    return true;
 }
 
-bool get(connection connect, size_t value){
-    ostringstream oss;
-    oss << "get " << key << " " << value;
-    istringstream iss(connect.recieve_message());
-    bool success;
-    iss >> success;
-    return success;
+bool registrate(){
+    string s = enter_name();
+    connect.send("registrate " + s);
+    int my_index = stoi(connect.recieve());
+    if (my_index < 0) return false;
+    id = to_string(my_index);
+    name = s;
+    return true;
 }
 
-bool transfer(connection connect, size_t value, string whom){
-    ostringstream oss;
-    oss << "transfer " << key << " " << value << " " << whom;
-    connect.send_message(oss.str());
-    bool success;
-    istringstream iss(connect.recieve_message());
-    iss >> success;
-    return success;
+bool enter(){
+    consent cons = ask("log in?");
+    if (cons == error) return false;
+    if (cons == yes)
+        if (login()) return true;
+    cons = ask("registrate?");
+    if (cons == no || cons == error) return false;
+    while (true){
+        if (!registrate()){
+            failure("This name is already used");
+            cons = ask("Try again?");
+            if (cons == no || cons == error) return false;
+        }else{
+            success("You've been registrated");
+            return true;
+        }
+    }
 }
 
-void logount(connection connect){
-    ostringstream oss;
-    oss << "logout " << key;
-    connect.send_message(oss.str());
+void help(){
+    cout    << "\n\tCommands, that you can use:\n"
+            << ">\tbalace (show your balnce)\n"
+            << ">\ttransfer <name, who will get> <summ> (transfer money to somebody)\n"
+            << ">\tget <summ> (get money)\n"
+            << ">\tadd <summ> (add money)\n"
+            << ">\thelp (show this menu)\n\n";
+}
+
+void get_balance(){
+    connect.send("balance " + id);
+    cout << "Your current balance: " << connect.recieve() << "\n";
+}
+
+bool transfer(){
+    string whom;
+    int summ;
+    if (!(cin >> whom >> summ)){
+        return false;
+    }
+    connect.send("transfer " + id + string(" ") + whom + " " + to_string(summ));
+    int ans = stoi(connect.recieve());
+    if (ans == -1){
+        failure("No such person");
+    }
+    else if (ans == -2){
+        failure("You don't have enough money");
+    }
+    else success("money has been transfered");
+    return true;
+}
+
+bool get(){
+    int summ;
+    if (!(cin >> summ)) return false;
+    connect.send("get " + id + string(" ") + to_string(summ));
+    int ans = stoi(connect.recieve());
+    if (ans == 0){
+        failure("You don't have enough money");
+    }else{
+        success("money have been getted");
+    }
+    return true;
+}
+
+bool add(){
+    int summ;
+    if (!(cin >> summ)) return false;
+    connect.send("add " + id + string(" ") + to_string(summ));
+    connect.recieve();
+    success("money have been added");
+    return true;
 }
 
 int main(){
-    connection connect(ZMQ_REQ);
-    cout << "client start\n";
-    enter (connect);
-    string command, whom_transfer;
-    size_t value;
-    while (cin >> command){
-        cout << command << endl;
-        if (command == "balance"){
-            cout << "Your current balance : " << balance(connect) << "\n";
-        }else if (command == "add"){
-            cin >> value;
-            add(connect, value);
-            cout << "Success\n";
-        }else if (command == "get"){
-            cin >> value;
-            if (get(connect, value)){
-                cout << "Success\n";
-            }else cout << "You don't have enough money\n";
-        }else if (command == "transfer"){
-            cin >> whom_transfer >> value;
-            if (transfer(connect, value, whom_transfer)){
-                cout << "Success\n";
-            }else cout << "You don't have enougn money\n";
-        }else{
-            cout << "Can't understand this command";
+    connect.connect(connection::client);
+    if (!enter()) return false;
+    string command;
+    help();
+    bool flag = true;
+    while (cin >> command && flag){
+        switch(command[0]){
+            case 'b':
+                get_balance();
+                break;
+            case 't':
+                flag = transfer();
+                break;
+            case 'g':
+                flag = get();
+                break;
+            case 'a':
+                flag = add();
+                break;
+            case 'h':
+                help();
+                break;
+            default:
+                cout << "******Wrong command******\n";
         }
     }
-    logount(connect);
+//    connect.send("logout " + name);
     return 0;
 }

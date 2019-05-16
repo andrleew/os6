@@ -5,18 +5,16 @@
 #include <vector>
 #include <string>
 #include <list>
+#include <unordered_map>
 
 using namespace std;
 
 class Person{
 public:
-    Person(double key, string name);
-    Person(double key, string name, size_t sum);
+    Person();
+    Person(size_t sum);
 
-    double getKey();
-    string& getName();
     size_t& getSum();
-    bool& isActive();
 
     void AddSum(size_t add_sum);
     bool GetSum(size_t get_sum);
@@ -26,29 +24,27 @@ public:
     ~Person();
 
 private:
-    double key;
-    string name;
     size_t sum;
-    bool active;
 };
 
 class Database{
 public:
     Database();
 
-    double Login(string name);
-    double Register(string name);
+    double Login(const string & name);
+    double Register(const string & name);
     size_t GetBalance(double key);
     void AddMoney(double key, size_t value);
     bool GetMoney(double keu, size_t value);
-    bool Transfer(double from, double whom, size_t sum);
-    void Remove(double index);
+    int Transfer(double from, const string & whom, size_t sum);
+    void Remove(const string & name);
 
     ~Database();
 
 private:
     vector<Person*> persons;
     list<double> inactive_indexes;
+    unordered_map <string, double> db;
 };
 
 #endif
